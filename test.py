@@ -15,6 +15,8 @@ class GnuPGTest(unittest.TestCase):
         self.gpg = bot.GnuPG("test/homedir")
         self.gpg.import_keys(self.public_key)
         self.gpg.import_keys(self.private_key)
+        # load configuration
+        bot.load_config('test/cryptobot.ini')
 
     def tearDown(self):
         pass
@@ -22,7 +24,7 @@ class GnuPGTest(unittest.TestCase):
     def test_export_keys_valid(self):
         pubkey = self.gpg.export_keys('0D4AF6E8D289BDE46594D41255BB44BA0D3E5387')
         self.assertEqual(pubkey, self.public_key)
-    
+
     def test_export_keys_invalid(self):
         pubkey = self.gpg.export_keys('0000000000000000000000000000000000000000')
         self.assertFalse(pubkey)
@@ -32,7 +34,7 @@ class GnuPGTest(unittest.TestCase):
         fingerprint = self.gpg.import_keys(rms_pubkey)
         self.assertTrue(fingerprint)
         self.assertEqual(fingerprint.upper(), '6F818B215E159EF3FA26B0BE624DC565135EA668')
-    
+
     def test_import_keys_invalid(self):
         fingerprint = self.gpg.import_keys('fail')
         self.assertFalse(fingerprint)
@@ -41,12 +43,12 @@ class GnuPGTest(unittest.TestCase):
         ciphertext = open('test/keys/test_decrypt_valid.asc').read()
         plaintext, signed = self.gpg.decrypt(ciphertext)
         self.assertEqual(plaintext, 'This is a test message.\n')
-    
+
     def test_decrypt_invalid(self):
         ciphertext = open('test/keys/test_decrypt_invalid.asc').read()
         plaintext, signed = self.gpg.decrypt(ciphertext)
         self.assertFalse(plaintext)
-    
+
     def test_encrypt(self):
         ciphertext = self.gpg.encrypt('test', '0D4AF6E8D289BDE46594D41255BB44BA0D3E5387')
         self.assertFalse(ciphertext == False)
@@ -55,7 +57,7 @@ class GnuPGTest(unittest.TestCase):
     def test_sign(self):
         sig = self.gpg.sign('test')
         self.assertTrue(bot.PGP_ARMOR_HEADER_SIGNATURE in sig)
-    
+
     def test_has_secret_key_with_uid(self):
         self.assertEqual('0D4AF6E8D289BDE46594D41255BB44BA0D3E5387', self.gpg.has_secret_key_with_uid('OpenPGPBot Test Suite (insecure) <invalid_and_insecure@openpgpbot.eff.org>'))
         self.assertEqual('0D4AF6E8D289BDE46594D41255BB44BA0D3E5387', self.gpg.has_secret_key_with_uid('invalid_and_insecure@openpgpbot.eff.org'))
@@ -65,7 +67,7 @@ class GnuPGTest(unittest.TestCase):
         expected_uid = 'OpenPGPBot Test Suite (insecure) <invalid_and_insecure@openpgpbot.eff.org>'
         self.assertTrue(self.gpg.has_public_key_with_uid('0D4AF6E8D289BDE46594D41255BB44BA0D3E5387', expected_uid))
         self.assertFalse(self.gpg.has_public_key_with_uid('0D4AF6E8D289BDE46594D41255BB44BA0D3E5387', 'fluff'))
-    
+
     def test_gen_key(self):
         random.seed()
         r = random.random()
@@ -84,7 +86,7 @@ class BotTest(unittest.TestCase):
         self.gpg = bot.GnuPG("test/homedir")
         self.gpg.import_keys(self.public_key)
         self.gpg.import_keys(self.private_key)
-        
+
         # set up tester
         self.emails = {}
         for filename in os.listdir('test/emails/'):
@@ -103,7 +105,7 @@ class BotTest(unittest.TestCase):
         msg = bot.OpenPGPMessage(self.emails['signed'],
                                  gpg=self.gpg)
         self.assertTrue(msg.signed)
-        
+
     def test_unsigned(self):
         # todo finish
         pass
@@ -115,7 +117,7 @@ class BotTest(unittest.TestCase):
         self.assertTrue(msg.encrypted_right)
         self.assertFalse(msg.encrypted_wrong)
         self.assertEquals(result_text, msg.decrypted_text.split("quoted-printable")[1].strip())
-    
+
     def test_encrypted_wrong_key(self):
         msg = bot.OpenPGPMessage(self.emails['encrypted_to_wrong_key'],
                                  gpg=self.gpg)
@@ -133,7 +135,7 @@ class BotTest(unittest.TestCase):
     def test_pubkey_included_attached_text_plain(self):
         msg = bot.OpenPGPMessage(self.emails['pubkey_attached_text-plain'], gpg=self.gpg)
         self.assertTrue(msg.pubkey_included)
-    
+
     def test_pubkey_included_attached_application_pgpkeys(self):
         msg = bot.OpenPGPMessage(self.emails['pubkey_attached_application-pgpkeys'], gpg=self.gpg)
         self.assertTrue(msg.pubkey_included)
@@ -146,7 +148,7 @@ class BotTest(unittest.TestCase):
         msg = bot.OpenPGPMessage(self.emails['encrypted_pubkey_attached_text-plain'], gpg=self.gpg)
         self.assertTrue(msg.encrypted_right)
         self.assertTrue(msg.pubkey_included)
-    
+
     def test_encrypted_pubkey_included_attached_application_pgpkeys(self):
         msg = bot.OpenPGPMessage(self.emails['encrypted_pubkey_attached_application-pgpkeys'], gpg=self.gpg)
         self.assertTrue(msg.encrypted_right)

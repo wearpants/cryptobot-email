@@ -12,23 +12,47 @@ from email.encoders import encode_quopri
 from cStringIO import StringIO
 from email.generator import Generator
 
-import sys, os, subprocess
+import sys, subprocess
+import os.path
 import imaplib, smtplib
 import email
 import jinja2
 import rfc822
 import quopri
+import ConfigParser
 
 PGP_ARMOR_HEADER_MESSAGE   = "-----BEGIN PGP MESSAGE-----"
 PGP_ARMOR_HEADER_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
 PGP_ARMOR_HEADER_PUBKEY    = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 PGP_ARMOR_FOOTER_PUBKEY    = "-----END PGP PUBLIC KEY BLOCK-----"
 
-try:
-    import config
-except ImportError:
-    print >> sys.stderr, "Error: could not load configuration from config.py"
-    sys.exit(1)
+config = None #: global configuration object
+
+class Bag(object):
+    """bag of attributes for storing config values"""
+    pass
+
+def load_config(fname='/etc/cryptobot.ini'):
+    """load global configuration
+
+    :arg str fname: path to configuration file
+    """
+    fname = os.path.abspath(os.path.expanduser(os.path.expandvars(fname)))
+    parser = ConfigParser.SafeConfigParser()
+    read_files = parser.read(fname)
+    if not read_files:
+        raise ValueError("Couldn't load config file: %s"%fname)
+
+    if not parser.has_section('cryptobot'):
+        raise ValueError("no 'cryptobot' section found in config file")
+
+    global config
+    config = Bag()
+    for k, v in parser.items('cryptobot'):
+        setattr(config, k, v)
+
+    # handle boolean specially
+    setattr(config, 'use_maildir', parser.getboolean('cryptobot', 'use_maildir'))
 
 class GnuPG(object):
     def __init__(self, homedir=False):
@@ -43,7 +67,7 @@ class GnuPG(object):
             return False
         else:
             return out
-    
+
     def import_keys(self, pubkey):
         """Imports a public key block and returns a fingerprint, or False of invalid pubkey"""
 
@@ -63,13 +87,13 @@ class GnuPG(object):
     def decrypt(self, ciphertext):
         """Attempts to decrypt ciphertext block, returns type (plaintext, signed (bool)) or False if decryption fails"""
         out, err = self._gpg(['--decrypt'], ciphertext)
-        
+
         if 'secret key not available' in err:
             return False, False
-        
+
         signed = 'Good signature from' in err
         return out, signed
-    
+
     def encrypt(self, plaintext, fingerprint):
         """Encrypts plaintext, returns ciphertext"""
         out, err = self._gpg(['--armor', '--batch', '--trust-model', 'always', '--encrypt', '--recipient', fingerprint], plaintext)
@@ -89,7 +113,7 @@ class GnuPG(object):
 
     def has_secret_key_with_uid(self, uid):
         """Searches secret keys for uid, and if it finds one returns the fingerprint, otherwise False"""
-        
+
         """
         When running gpg --list-secret-keys --with-colons --fingerprint, here is some sample output.
 
@@ -114,9 +138,9 @@ class GnuPG(object):
         in the sec line (before fpr), but if it's a different uid it's listed in a uid line (after fpr).
         So it's confusing, but this seems to work.
         """
-        
+
         out, err = self._gpg(['--list-secret-keys', '--with-colons', '--fingerprint'])
-        
+
         return_fp = False
         cur_fp = ''
         for line in out.split('\n'):
@@ -142,7 +166,7 @@ class GnuPG(object):
 
     def gen_key(self, name, email, key_length=4096):
         """Generate a key, returns its key ID"""
-        
+
         # make input variable to pass into gpg
         input  = "Key-Type: RSA\n"
         input += "Key-Length: "+str(key_length)+"\n"
@@ -185,7 +209,7 @@ class EmailFetcher(object):
         # then str(msg) does not print the full message. Hence trying
         # to use Maildir to import Messages, then get their string representations
         # to import into OpenPGPMessage failed, as did importing directly
-        # since OpenPGPMessage expects a string. Instead we use os.walk to 
+        # since OpenPGPMessage expects a string. Instead we use os.walk to
         # get Maildir files directly
         emails = []
         for file_path in os.walk(config.MAILDIR):
@@ -230,10 +254,10 @@ class EmailSender(object):
         self.message = message
         self.env = env
         self.fp = fp
-         
+
         self.html_template = self.env.get_template('email_template.html')
         self.txt_template = self.env.get_template('email_template.txt')
-        
+
         self._gpg = GnuPG()
 
         self.construct_and_send_email()
@@ -292,7 +316,7 @@ class EmailSender(object):
         html_part = MIMEBase('text', 'html')
         html_part.set_payload(body_html)
         encode_quopri(html_part)
-        
+
         body.attach(html_part)
         msg.attach(body)
 
@@ -321,13 +345,13 @@ class EmailSender(object):
         signed = MIMEMultipart(_subtype="signed", micalg="pgp-sha1", protocol="application/pgp-signature")
         signed.attach(msg)
         signed.attach(sig_part)
-        
+
         # if we're just signing and not encrypting this message, add the headers directly to the signed part
         if not self.message.pubkey_fingerprint:
             signed['Subject'] = subject
             signed['From'] = from_email
             signed['To'] = to_email
-        
+
         # need to add a '\r\n' right before the sig part (#19)
         # because of this bug http://bugs.python.org/issue14983
         signed_string = self.as_string(signed)
@@ -378,7 +402,7 @@ class EmailSender(object):
     def sign_body(self):
         # need to implement PGP/MIME to sign the body here
         pass
-    
+
     def encrypt_body(self):
         # need to implement PGP/MIME to sign the body here
         pass
@@ -394,8 +418,8 @@ class OpenPGPMessage(Message):
         else:
             self._gpg = gpg
 
-        self._content_types = ["text/plain", "text/html", 
-            "application/pgp-signature", "application/pgp-keys", 
+        self._content_types = ["text/plain", "text/html",
+            "application/pgp-signature", "application/pgp-keys",
             "application/octet-stream"]
 
         self._parts = []
@@ -426,7 +450,7 @@ class OpenPGPMessage(Message):
         self._pubkey_included       = False
         self._pubkey_included_wrong = False
         self._pubkey_fingerprint    = False
-         
+
         encrypted_parts = self._find_email_payload_matches(PGP_ARMOR_HEADER_MESSAGE)
         if encrypted_parts:
             if len(encrypted_parts) > 1:
@@ -441,7 +465,7 @@ class OpenPGPMessage(Message):
 
                 if signed:
                     self._signed = True
-        
+
         signed_parts = self._find_email_payload_matches(PGP_ARMOR_HEADER_SIGNATURE)
         if signed_parts:
             if len(signed_parts) > 1:
@@ -449,7 +473,7 @@ class OpenPGPMessage(Message):
                 print "More than one signed part in this message. That's weird..."
             self._signed = True
             # todo: check signature, public key attached, etc
-        
+
         pubkey_parts = self._find_email_payload_matches(PGP_ARMOR_HEADER_PUBKEY)
         if pubkey_parts:
             # find all the pubkeys
@@ -469,7 +493,7 @@ class OpenPGPMessage(Message):
                     if fingerprint:
                         fingerprints.append(fingerprint)
                 fingerprints = list(set(fingerprints))
-                
+
                 if len(fingerprints) == 0:
                     self._pubkey_included_wrong = True
                 else:
@@ -504,13 +528,13 @@ class OpenPGPMessage(Message):
                 in_block = False
                 pubkeys.append(pubkey)
                 pubkey = ""
-        
+
         return pubkeys
 
     @property
     def encrypted_right(self):
         return self._encrypted_right
-    
+
     @property
     def encrypted_wrong(self):
         return self._encrypted_wrong
@@ -526,11 +550,11 @@ class OpenPGPMessage(Message):
     @property
     def pubkey_included(self):
         return self._pubkey_included
-    
+
     @property
     def pubkey_included_wrong(self):
         return self._pubkey_included_wrong
-    
+
     @property
     def pubkey_fingerprint(self):
         return self._pubkey_fingerprint
@@ -557,7 +581,7 @@ def check_bot_keypair(allow_new_key):
     gpg = GnuPG()
 
     expected_uid = '{0} <{1}>'.format(config.PGP_NAME, config.PGP_EMAIL)
-    
+
     fingerprint = gpg.has_secret_key_with_uid(expected_uid)
     if not fingerprint:
         if allow_new_key:
@@ -574,8 +598,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cryptobot arg parser")
     parser.add_argument('--generate-new-key',dest='allow_new_key',action='store_true')
     parser.add_argument('--no-generate-new-key',dest='allow_new_key',action='store_false')
+    parser.add_argument('--config', dest="config_file", default="/etc/cryptobot.ini")
     parser.set_defaults(allow_new_key=False)
     args = parser.parse_args()
+
+    load_config(args.config_file)
 
     fp = check_bot_keypair(args.allow_new_key)
     main(fp)
