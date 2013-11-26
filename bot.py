@@ -238,7 +238,8 @@ class EmailSender(object):
 
         self.construct_and_send_email()
 
-    def as_string(self, msg):
+    @staticmethod
+    def as_string(msg):
         # using this instead of msg.as_string(), because the header wrapping was causing sig verification problems
         # http://docs.python.org/2/library/email.message.html#email.message.Message.as_string
         fp = StringIO()
