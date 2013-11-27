@@ -4,7 +4,7 @@ Configuration
 Cryptobot uses `INI-style
 <http://docs.python.org/2/library/configparser.html>`__ configuration files.
 By default, it looks for ``/etc/cryptobot.ini``, but a custom file may be
-passed on command line using ``--config``. The config file should have a single section named ``cryptobot``, with the following recognized options:
+passed on command line using ``--config``. The config file should have a section named ``cryptobot``, with the following recognized options:
 
 GPG options
 -----------
@@ -62,3 +62,7 @@ username of SMTP server
 .. envvar:: SMTP_PASSWORD
 
 password of SMTP server
+
+Logging
+-------
+The config file may also contain sections for configuring `Python logging <http://docs.python.org/2/library/logging.config.html#configuration-file-format>`__.
