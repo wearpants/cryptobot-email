@@ -52,7 +52,6 @@ def load_config(fname='/etc/cryptobot.ini'):
     global config
     config = Bag()
     for k, v in parser.items('cryptobot'):
-        print k, v
         setattr(config, k, v)
 
     # handle boolean specially
