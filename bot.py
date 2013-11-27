@@ -29,7 +29,7 @@ PGP_ARMOR_FOOTER_PUBKEY    = "-----END PGP PUBLIC KEY BLOCK-----"
 config = None #: global configuration object
 
 class Bag(object):
-    """bag of attributes for storing config values"""
+    """bag of attributes for storing config values. For internal use."""
     pass
 
 def load_config(fname='/etc/cryptobot.ini'):
