@@ -12,23 +12,47 @@ from email.encoders import encode_quopri
 from cStringIO import StringIO
 from email.generator import Generator
 
-import sys, os, subprocess
+import sys, subprocess
+import os.path
 import imaplib, smtplib
 import email
 import jinja2
 import rfc822
 import quopri
+import ConfigParser
 
 PGP_ARMOR_HEADER_MESSAGE   = "-----BEGIN PGP MESSAGE-----"
 PGP_ARMOR_HEADER_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
 PGP_ARMOR_HEADER_PUBKEY    = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 PGP_ARMOR_FOOTER_PUBKEY    = "-----END PGP PUBLIC KEY BLOCK-----"
 
-try:
-    import config
-except ImportError:
-    print >> sys.stderr, "Error: could not load configuration from config.py"
-    sys.exit(1)
+config = None #: global configuration object
+
+class Bag(object):
+    """bag of attributes for storing config values. For internal use."""
+    pass
+
+def load_config(fname='/etc/cryptobot.ini'):
+    """load global configuration
+
+    :arg str fname: path to configuration file
+    """
+    fname = os.path.abspath(os.path.expanduser(os.path.expandvars(fname)))
+    parser = ConfigParser.SafeConfigParser()
+    read_files = parser.read(fname)
+    if not read_files:
+        raise ValueError("Couldn't load config file: %s"%fname)
+
+    if not parser.has_section('cryptobot'):
+        raise ValueError("no 'cryptobot' section found in config file")
+
+    global config
+    config = Bag()
+    for k, v in parser.items('cryptobot'):
+        setattr(config, k, v)
+
+    # handle boolean specially
+    setattr(config, 'use_maildir', parser.getboolean('cryptobot', 'use_maildir'))
 
 class GnuPG(object):
     """A wrapper around ``gpg`` executable
@@ -39,7 +63,7 @@ class GnuPG(object):
     :ivar homedir: the GPG home directory. Will be created if it doesn't exist.
     """
     def __init__(self, homedir=False):
-        self.homedir = homedir or config.GPG_HOMEDIR
+        self.homedir = homedir or config.gpg_homedir
         if not os.path.exists(self.homedir):
             os.mkdir(self.homedir, 0700)
         # XXX check permissions on existing directory and fix (or at least warn)?
@@ -151,7 +175,6 @@ class GnuPG(object):
         ## in a uid line (after fpr). So it's confusing, but this seems to
         ## work.
 
-
         out, err = self._gpg(['--list-secret-keys', '--with-colons', '--fingerprint'])
 
         return_fp = False
@@ -191,7 +214,6 @@ class GnuPG(object):
         :arg int key_length: how many bits should the key be
         :rtype: str
         :returns: key ID of generated key"""
-
         # make input variable to pass into gpg
         input  = "Key-Type: RSA\n"
         input += "Key-Length: "+str(key_length)+"\n"
@@ -234,7 +256,7 @@ class EmailFetcher(object):
         self.use_maildir = use_maildir
 
         if not self.use_maildir:
-            self.login(config.IMAP_USERNAME, config.IMAP_PASSWORD, config.IMAP_SERVER)
+            self.login(config.imap_username, config.imap_password, config.imap_server)
 
     def __del__(self):
         # XXX this should be called explicitly. Avoid __del__!
@@ -266,13 +288,13 @@ class EmailFetcher(object):
         # since OpenPGPMessage expects a string. Instead we use os.walk to
         # get Maildir files directly
         emails = []
-        for file_path in os.walk(config.MAILDIR):
+        for file_path in os.walk(config.maildir):
             for f in file_path[2]:
                 # XXX why this extension?
                 if (f.endswith('openpgpbot')):
                     # this is a new email, and a horrible hack
                     # todo: more elegantly get file path
-                    full_file_path = os.path.join(config.MAILDIR, 'new', f)
+                    full_file_path = os.path.join(config.maildir, 'new', f)
                     emails.append(OpenPGPMessage(open(full_file_path).read(), f.split('.')[0]))
                     os.remove(full_file_path)
         # todo delete email!
@@ -378,7 +400,7 @@ class EmailSender(object):
         else:
             subject = 'CryptoBot response'
 
-        from_email = '{0} <{1}>'.format(config.PGP_NAME, config.PGP_EMAIL)
+        from_email = '{0} <{1}>'.format(config.pgp_name, config.pgp_email)
 
         # start the email
         msg = MIMEMultipart('mixed')
@@ -410,7 +432,7 @@ class EmailSender(object):
         # if the message is not encrypted, attach public key (#16)
         if not self.message.encrypted_right:
             pubkey = str(self._gpg.export_keys(self.fp))
-            pubkey_filename = '{0} {1} (0x{2}) pub.asc'.format(config.PGP_NAME, config.PGP_EMAIL, str(self.fp)[:-8])
+            pubkey_filename = '{0} {1} (0x{2}) pub.asc'.format(config.pgp_name, config.pgp_email, str(self.fp)[:-8])
 
             pubkey_part = MIMEBase('application', 'pgp-keys')
             pubkey_part.add_header('Content-Disposition', 'attachment; filename="%s"' % pubkey_filename)
@@ -482,11 +504,11 @@ class EmailSender(object):
         :arg str from_email: From: address
         :arg str to_email: To: address
         """
-        if config.SMTP_SERVER == 'localhost':
-            s = smtplib.SMTP(config.SMTP_SERVER)
+        if config.smtp_server == 'localhost':
+            s = smtplib.smtp(config.smtp_server)
         else:
-            s = smtplib.SMTP_SSL(config.SMTP_SERVER)
-            s.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+            s = smtplib.smtp_ssl(config.smtp_server)
+            s.login(config.smtp_username, config.smtp_password)
 
         s.sendmail(from_email, [to_email], msg_string)
         s.quit()
@@ -710,7 +732,7 @@ def main(fp):
     template_env = jinja2.Environment(loader=template_loader, trim_blocks=True)
 
     # email fetcher
-    fetcher = EmailFetcher(use_maildir=config.USE_MAILDIR)
+    fetcher = EmailFetcher(use_maildir=config.use_maildir)
     messages = fetcher.get_all_mail()
     for message in messages:
         # respond to the email
@@ -731,13 +753,13 @@ def check_bot_keypair(allow_new_key):
     """
     gpg = GnuPG()
 
-    expected_uid = '{0} <{1}>'.format(config.PGP_NAME, config.PGP_EMAIL)
+    expected_uid = '{0} <{1}>'.format(config.pgp_name, config.pgp_email)
 
     fingerprint = gpg.has_secret_key_with_uid(expected_uid)
     if not fingerprint:
         if allow_new_key:
             print 'Generating new OpenPGP keypair with user ID: {0}'.format(expected_uid)
-            fingerprint = gpg.gen_key(config.PGP_NAME, config.PGP_EMAIL)
+            fingerprint = gpg.gen_key(config.pgp_name, config.pgp_email)
             print 'Finished generating keypair. Fingerprint is: {0}'.format(fingerprint)
         else:
             raise ValueError, "Could not find keypair for cryptobot"
@@ -749,8 +771,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cryptobot arg parser")
     parser.add_argument('--generate-new-key',dest='allow_new_key',action='store_true')
     parser.add_argument('--no-generate-new-key',dest='allow_new_key',action='store_false')
+    parser.add_argument('--config', dest="config_file", default="/etc/cryptobot.ini")
     parser.set_defaults(allow_new_key=False)
     args = parser.parse_args()
+
+    load_config(args.config_file)
 
     fp = check_bot_keypair(args.allow_new_key)
     main(fp)

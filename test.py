@@ -15,6 +15,8 @@ class GnuPGTest(unittest.TestCase):
         self.gpg = cryptobot_email.GnuPG("test-data/homedir")
         self.gpg.import_keys(self.public_key)
         self.gpg.import_keys(self.private_key)
+        # load configuration
+        cryptobot_email.load_config('test/cryptobot.ini')
 
     def tearDown(self):
         pass
