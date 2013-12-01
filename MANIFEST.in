@@ -7,3 +7,5 @@ recursive-include test-data/emails *
 recursive-include test-data/keys *.asc *.key
 include test.py
 recursive-include sphinx *.py *.rst *.bat *.png Makefile
+recursive-include templates *.txt *.html
+recursive-include doc *.md *.png
