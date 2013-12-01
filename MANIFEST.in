@@ -1,0 +1,9 @@
+include LICENSE
+include README.rst
+include Makefile
+include cryptobot.ini
+include test-data/cryptobot.ini
+recursive-include test-data/emails *
+recursive-include test-data/keys *.asc *.key
+include test.py
+recursive-include sphinx *.py *.rst *.bat *.png Makefile
