@@ -20,6 +20,8 @@ import jinja2
 import rfc822
 import quopri
 import ConfigParser
+import argparse
+
 
 PGP_ARMOR_HEADER_MESSAGE   = "-----BEGIN PGP MESSAGE-----"
 PGP_ARMOR_HEADER_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
@@ -721,8 +723,8 @@ class OpenPGPMessage(Message):
         """
         return self._pubkey_fingerprint
 
-def main(fp):
-    """main entry point, sorta. Fetches & replies to emails, etc..
+def doit(fp):
+    """do most of the work. Fetches & replies to emails, etc..
 
     :arg str fp: fingerprint of the bot itself
     """
@@ -766,8 +768,8 @@ def check_bot_keypair(allow_new_key):
 
     return fingerprint
 
-if __name__ == "__main__":
-    import argparse
+def main():
+    """main entry point, for use with setuptools"""
     parser = argparse.ArgumentParser(description="Cryptobot arg parser")
     parser.add_argument('--generate-new-key',dest='allow_new_key',action='store_true')
     parser.add_argument('--no-generate-new-key',dest='allow_new_key',action='store_false')
@@ -778,4 +780,7 @@ if __name__ == "__main__":
     load_config(args.config_file)
 
     fp = check_bot_keypair(args.allow_new_key)
-    main(fp)
+    doit(fp)
+
+if __name__ == "__main__":
+    main()
