@@ -730,7 +730,7 @@ def doit(fp):
     """
     # XXX rename fp to fingerprint
     # jinja2
-    template_loader = jinja2.FileSystemLoader(searchpath="templates")
+    template_loader = jinja2.PackageLoader('cryptobot_email', 'templates')
     template_env = jinja2.Environment(loader=template_loader, trim_blocks=True)
 
     # email fetcher

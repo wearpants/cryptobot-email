@@ -24,10 +24,10 @@ setup(
     author='EFF Tech Team',
     author_email='tech@eff.org',
     url='https://github.com/EFForg/cryptobot-email',
-    py_modules=[
+    packages=[
         'cryptobot_email',
     ],
-    include_package_data=True,
+    package_data={'cryptobot_email': ['templates/*']},
     install_requires=[
         'Jinja2',
     ],
