@@ -37,6 +37,9 @@ nosetests.xml
 # Virtualenv
 env/
 
+# Sphinx
+sphinx/_build
+
 # Vim
 *.swp
 
@@ -44,3 +47,4 @@ env/
 config.py
 test/homedir/
 homedir/
+cryptobot.log
