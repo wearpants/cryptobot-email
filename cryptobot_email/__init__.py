@@ -766,9 +766,7 @@ def check_bot_keypair(allow_new_key):
         if allow_new_key:
             log.info('Generating new OpenPGP keypair with user ID: %s', expected_uid)
             fingerprint = gpg.gen_key(config.pgp_name, config.pgp_email)
-            fingerprint = gpg.gen_key(config.PGP_NAME, config.PGP_EMAIL)
             log.info('Finished generating keypair. Fingerprint is: %s', fingerprint)
-
         else:
             raise ValueError, "Could not find keypair for cryptobot"
 
