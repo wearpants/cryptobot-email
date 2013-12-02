@@ -20,6 +20,9 @@ import jinja2
 import rfc822
 import quopri
 import ConfigParser
+import logging.config
+
+log = logging.getLogger('cryptobot')
 
 PGP_ARMOR_HEADER_MESSAGE   = "-----BEGIN PGP MESSAGE-----"
 PGP_ARMOR_HEADER_SIGNATURE = "-----BEGIN PGP SIGNATURE-----"
@@ -53,6 +56,8 @@ def load_config(fname='/etc/cryptobot.ini'):
 
     # handle boolean specially
     setattr(config, 'use_maildir', parser.getboolean('cryptobot', 'use_maildir'))
+
+    log.debug('Configured from %s', fname)
 
 class GnuPG(object):
     """A wrapper around ``gpg`` executable
@@ -388,7 +393,7 @@ class EmailSender(object):
         elif 'From' in self.message:
             to_email = self.message['From']
         if not to_email:
-            print 'Cannot decide who to respond to '
+            log.warn('Cannot decide who to respond to')
             return # XXX throw exception instead
 
         # what the response subject should be
@@ -495,7 +500,7 @@ class EmailSender(object):
             final_message = signed_string
 
         self.send_email(final_message, from_email, to_email)
-        print 'Responded to {0} {1}'.format(self.message['From'], str(template_vars))
+        log.info('Responded to %s: %r', self.message['From'], template_vars)
 
     def send_email(self, msg_string, from_email, to_email):
         """Send email via SMTP. For internal use.
@@ -586,7 +591,7 @@ class OpenPGPMessage(Message):
         if encrypted_parts:
             if len(encrypted_parts) > 1:
                 # todo: raise error here?
-                print "More than one encrypted part in this message. That's weird..."
+                log.warn("More than one encrypted part in this message")
             self._decrypted_text, signed = self._gpg.decrypt(encrypted_parts[0])
             if not self._decrypted_text:
                 self._encrypted_wrong = True
@@ -601,7 +606,7 @@ class OpenPGPMessage(Message):
         if signed_parts:
             if len(signed_parts) > 1:
                 # todo: raise error here?
-                print "More than one signed part in this message. That's weird..."
+                log.warn("More than one signed part in this message")
             self._signed = True
             # todo: check signature, public key attached, etc
 
@@ -758,9 +763,11 @@ def check_bot_keypair(allow_new_key):
     fingerprint = gpg.has_secret_key_with_uid(expected_uid)
     if not fingerprint:
         if allow_new_key:
-            print 'Generating new OpenPGP keypair with user ID: {0}'.format(expected_uid)
+            log.info('Generating new OpenPGP keypair with user ID: %s', expected_uid)
             fingerprint = gpg.gen_key(config.pgp_name, config.pgp_email)
-            print 'Finished generating keypair. Fingerprint is: {0}'.format(fingerprint)
+            fingerprint = gpg.gen_key(config.PGP_NAME, config.PGP_EMAIL)
+            log.info('Finished generating keypair. Fingerprint is: %s', fingerprint)
+
         else:
             raise ValueError, "Could not find keypair for cryptobot"
 
@@ -775,6 +782,8 @@ if __name__ == "__main__":
     parser.set_defaults(allow_new_key=False)
     args = parser.parse_args()
 
+
+    logging.config.fileConfig(args.config_file, disable_existing_loggers=False)
     load_config(args.config_file)
 
     fp = check_bot_keypair(args.allow_new_key)
