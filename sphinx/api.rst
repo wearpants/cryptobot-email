@@ -1,7 +1,7 @@
 API Documentation
 =================
 
-bot
----
+cryptobot_email
+---------------
 
-.. automodule:: bot
+.. automodule:: cryptobot_email
