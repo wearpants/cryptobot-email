@@ -19,11 +19,19 @@ This is a Python project ; you can install it with `pip <http://www.pip-installe
    $ mkvirtualenv cryptobot-email # if you use virtualenv(wrapper)
    $ pip install ./cryptobot-email/
 
+   $ workon cryptobot-email # activeate your virtualenv
+
    $ # run some tests
-   $ make -B -C cryptobot-email/ test
+   $ make -B test
+
+   $ # build docs
+   $ make sphinx
+   $ firefox sphinx/_build/html/index.html
 
    $ # you now have a shell command, congratulations
    $ cryptobot-email --config <your_config.ini>
+
+   $
 
 
 Relevant specs
